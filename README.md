@@ -17,6 +17,7 @@ Tested with pfSense 2.5.x, Zabbix 4.0, Zabbix 5.0
  - Basic Service Discovery and Monitoring (Service Status)
  - pfSense Version/Update Available
  - Packages Update Available
+ - Certificats Monitoring
  
 **Template pfSense Active: OpenVPN Server User Auth**
 
@@ -160,7 +161,9 @@ From **Diagnostics/Command Prompt** input this commands:
 pkg update && pkg install -y  -g 'py*-speedtest-cli'
 ```
 
-For testing if speedtest is installed properly you can try it:
+> You can add this command also to **Services** > **Shellcmd** if you want automatic install at boot.
+
+Speedtest python package could be broken at the moment, so you could need an extra step, *only if manually executing speedtest results in an error*: download the latest version from package author's github repo.
 
 ```bash
 /usr/local/bin/speedtest

@@ -54,6 +54,9 @@ https://github.com/Futur-Tech/futur-tech-zabbix-pfsense</description>
                     <name>Memory</name>
                 </application>
                 <application>
+                    <name>Network Interfaces</name>
+                </application>
+                <application>
                     <name>Network Limits</name>
                 </application>
                 <application>
@@ -1170,7 +1173,7 @@ and {Template pfSense Active:pfsense.value[system,installed_version].strlen()}&g
                             <key>net.if.in[{#IFNAME},errors]</key>
                             <applications>
                                 <application>
-                                    <name>Network interfaces</name>
+                                    <name>Network Interfaces</name>
                                 </application>
                             </applications>
                             <preprocessing>
@@ -1188,7 +1191,7 @@ and {Template pfSense Active:pfsense.value[system,installed_version].strlen()}&g
                             <units>bps</units>
                             <applications>
                                 <application>
-                                    <name>Network interfaces</name>
+                                    <name>Network Interfaces</name>
                                 </application>
                             </applications>
                             <preprocessing>
@@ -1208,7 +1211,7 @@ and {Template pfSense Active:pfsense.value[system,installed_version].strlen()}&g
                             <key>net.if.out[{#IFNAME},errors]</key>
                             <applications>
                                 <application>
-                                    <name>Network interfaces</name>
+                                    <name>Network Interfaces</name>
                                 </application>
                             </applications>
                             <preprocessing>
@@ -1226,7 +1229,7 @@ and {Template pfSense Active:pfsense.value[system,installed_version].strlen()}&g
                             <units>bps</units>
                             <applications>
                                 <application>
-                                    <name>Network interfaces</name>
+                                    <name>Network Interfaces</name>
                                 </application>
                             </applications>
                             <preprocessing>
@@ -1344,7 +1347,7 @@ and {Template pfSense Active:pfsense.value[system,installed_version].strlen()}&g
                             <name>OpenVPN Server {#NAME} Tunnel Status</name>
                             <type>ZABBIX_ACTIVE</type>
                             <key>pfsense.value[openvpn_servervalue,{#SERVER},status]</key>
-                            <applications>
+                                    <applications>
                                 <application>
                                     <name>OpenVPN Server</name>
                                 </application>
