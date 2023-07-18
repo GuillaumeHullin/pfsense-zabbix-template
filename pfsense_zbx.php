@@ -155,7 +155,7 @@ function pfz_interface_speedtest_value($ifname, $value){
 	$filename = "/tmp/speedtest-$ifname";
 	
 	if (file_exists($filename)) {
-		$speedtest_data = json_decode(file_get_contents($filename), true);
+		$speedtest_data = json_decode(file_get_contents($filename), true) ?? [];
 		
 		if (array_key_exists($value, $speedtest_data)) {
 			if ($subvalue == false) 
@@ -200,6 +200,8 @@ function pfz_speedtest_cron_install($enable=true){
 }        	
 
 
+// 2023-02-26:
+// Fixed issue #127
 function pfz_speedtest_exec ($ifname, $ipaddr){
 	
 	$filename = "/tmp/speedtest-$ifname";
@@ -216,7 +218,7 @@ function pfz_speedtest_exec ($ifname, $ipaddr){
 
 		if (file_exists($filerun)==false) {	  			  		
 	  		touch($filerun);
-	  		$st_command = "/usr/local/bin/speedtest --source $ipaddr --json > $filetemp";
+	  		$st_command = "/usr/local/bin/speedtest --secure --source $ipaddr --json > $filetemp";
 			exec ($st_command);
 			rename($filetemp,$filename);
 			@unlink($filerun);
@@ -470,31 +472,33 @@ function pfz_service_value($name,$value){
                          $status = get_service_status($service);
                          if ($status=="") $status = 0;
                          echo $status;
-                         break;               
+                         return;
 
                     case "name":
                          echo $namecfr;
-                         break;
+                         return;
 
                     case "enabled":
                          if (is_service_enabled($service['name']))
                               echo 1;
                          else
                               echo 0;
-                         break;
+                         return;
 
                     case "run_on_carp_slave":
                          if (in_array($carpcfr,$stopped_on_carp_slave))
                               echo 0;
                          else
                               echo 1;
-                         break;
+                         return;
                     default:               
                          echo $service[$value];
-                         break;
+                         return;
                }
           }                                              
     }
+
+    echo 0;
 }
 
 
@@ -563,7 +567,6 @@ function pfz_ipsec_discovery_ph1(){
     echo $json_string;
 	
 }
-
 
 function pfz_ipsec_ph1($ikeid,$valuekey){	
 	// Get Value from IPsec Phase 1 Configuration
@@ -665,13 +668,18 @@ function pfz_ipsec_status($ikeid,$reqid=-1,$valuekey='state'){
 	$a_phase1 = &$config['ipsec']['phase1'];
 	$conmap = array();
 	foreach ($a_phase1 as $ph1ent) {
-		if (get_ipsecifnum($ph1ent['ikeid'], 0)) {
-			$cname = "con" . get_ipsecifnum($ph1ent['ikeid'], 0);
-		} else {
-			$cname = "con{$ph1ent['ikeid']}00000";
-		}
-		$conmap[$cname] = $ph1ent['ikeid'];
-	}
+	    if (function_exists('get_ipsecifnum')) {
+            if (get_ipsecifnum($ph1ent['ikeid'], 0)) {
+                $cname = "con" . get_ipsecifnum($ph1ent['ikeid'], 0);
+            } else {
+                $cname = "con{$ph1ent['ikeid']}00000";
+            }
+        } else{
+            $cname = ipsec_conid($ph1ent);
+        }
+        
+        $conmap[$cname] = $ph1ent['ikeid'];
+    }
 
 	$status = ipsec_list_sa();
 	$ipsecconnected = array();
@@ -736,6 +744,42 @@ function pfz_ipsec_status($ikeid,$reqid=-1,$valuekey='state'){
 	return $value;
 }
 
+// Temperature sensors Discovery
+function pfz_temperature_sensors_discovery(){
+
+
+	$json_string = '{"data":[';
+	$sensors = [];
+	exec("sysctl -a | grep temperature | cut -d ':' -f 1", $sensors, $code);
+	if ($code != 0) {
+	    echo "";
+	    return;
+	} else {
+        foreach ($sensors as $sensor) {
+            $json_string .= '{"{#SENSORID}":"' . $sensor . '"';
+            $json_string .= '},';
+        }
+    }
+
+	$json_string = rtrim($json_string,",");
+    $json_string .= "]}";
+
+    echo $json_string;
+
+}
+
+// Temperature sensor get value
+function pfz_get_temperature($sensorid){
+
+	exec("sysctl '$sensorid' | cut -d ':' -f 2", $value, $code);
+	if ($code != 0 or count($value)!=1) {
+	    echo "";
+	    return;
+	} else {
+	    echo trim($value[0]);
+    }
+
+}
 
 
 function pfz_carp_status($echo = true){
@@ -816,6 +860,13 @@ function pfz_dhcp_get($valuekey) {
 	@exec("/bin/cat {$leasesfile} 2>/dev/null| {$awk} {$cleanpattern} | {$awk} {$splitpattern}", $leases_content);
 	$leases_count = count($leases_content);
 	@exec("/usr/sbin/arp -an", $rawdata);
+
+	$leases = [];
+	$pools = [];
+	
+	$i = 0;
+	$l = 0;
+	$p = 0;
 
 	foreach ($leases_content as $lease) {
 		/* split the line by space */
@@ -1073,24 +1124,36 @@ function pfz_get_smart_status(){
 function pfz_get_cert_date($valuekey){
     global $config;
     
+    // Contains a list of refs that were revoked and should not be considered
+    $revoked_cert_refs = [];
+    foreach ($config["crl"] as $crl) {
+        foreach ($crl["cert"] as $revoked_cert) {
+            $revoked_cert_refs[] = $revoked_cert["refid"];
+        }
+    }
+    
     $value = 0;
-	foreach (array("cert", "ca") as $cert_type) {
-		switch ($valuekey){
-		case "validFrom.max":
-			foreach ($config[$cert_type] as $cert) {
-				$certinfo = openssl_x509_parse(base64_decode($cert[crt]));
-				if ($value == 0 or $value < $certinfo['validFrom_time_t']) $value = $certinfo['validFrom_time_t'];
-            }
-			break;
-		case "validTo.min":
-			foreach ($config[$cert_type] as $cert) {
-				$certinfo = openssl_x509_parse(base64_decode($cert[crt]));
-				if ($value == 0 or $value > $certinfo['validTo_time_t']) $value = $certinfo['validTo_time_t'];
-			}
-			break;
-		}
-	}
-	echo $value;
+        foreach (array("cert", "ca") as $cert_type) {
+                switch ($valuekey){
+                case "validFrom.max":
+                        foreach ($config[$cert_type] as $cert) {
+                                if ( ! in_array($cert['refid'], $revoked_cert_refs) ) {
+                                        $certinfo = openssl_x509_parse(base64_decode($cert["crt"]));
+                                        if ($value == 0 or $value < $certinfo['validFrom_time_t']) $value = $certinfo['validFrom_time_t'];
+                                }
+            		}
+                        break;
+                case "validTo.min":
+                        foreach ($config[$cert_type] as $cert) {
+                                if ( ! in_array($cert['refid'], $revoked_cert_refs) ) {
+                                        $certinfo = openssl_x509_parse(base64_decode($cert["crt"]));
+                                        if ($value == 0 or $value > $certinfo['validTo_time_t']) $value = $certinfo['validTo_time_t'];
+                                }
+                        }
+                        break;
+                }
+        }
+        echo $value;
 }
 
 // File is present
@@ -1100,6 +1163,7 @@ function pfz_file_exists($filename) {
 	else
 		echo "0";
 }
+
 
 // Value mappings
 // Each value map is represented by an associative array
@@ -1228,6 +1292,9 @@ function pfz_discovery($section){
           case "dhcpfailover":
           	   pfz_dhcpfailover_discovery();
                break;
+          case "temperature_sensors":
+               pfz_temperature_sensors_discovery();
+               break;
      }         
 }
 
@@ -1294,6 +1361,9 @@ switch (strtolower($argv[1])){
           break;     	  
      case "cert_date":
           pfz_get_cert_date($argv[2]);
+          break;
+     case "temperature":
+          pfz_get_temperature($argv[2]);
           break;
      default:
           pfz_test();
