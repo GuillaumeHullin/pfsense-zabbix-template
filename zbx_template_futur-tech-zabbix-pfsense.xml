@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zabbix_export>
+    <version>5.0</version>
+    <date>2023-07-18T10:32:51Z</date>
+    <groups>
+        <group>
+            <name>Templates/Futur-Tech/Applications</name>
+        </group>
+    </groups>
+    <templates>
+        <template>
+            <template>Template Futur-Tech App pfSense Active</template>
+            <name>Template Futur-Tech App pfSense Active</name>
+            <description>Requires: https://github.com/rbicelli/pfsense-zabbix-template&#13;
+More info: https://github.com/Futur-Tech/futur-tech-zabbix-pfsense</description>
+            <templates>
+                <template>
+                    <name>pfSense Active Speedtest</name>
+                </template>
+                <template>
+                    <name>Template Module Zabbix agent active</name>
+                </template>
+                <template>
+                    <name>Template pfSense Active</name>
+                </template>
+                <template>
+                    <name>Template pfSense Active IPsec</name>
+                </template>
+                <template>
+                    <name>Template pfSense Active OpenVPN Server User Auth</name>
+                </template>
+            </templates>
+            <groups>
+                <group>
+                    <name>Templates/Futur-Tech/Applications</name>
+                </group>
+            </groups>
+            <applications>
+                <application>
+                    <name>Certificate Manager</name>
+                </application>
+            </applications>
+            <items>
+                <item>
+                    <name>Certificates Manager: latest &quot;validFrom&quot;</name>
+                    <type>ZABBIX_ACTIVE</type>
+                    <key>pfsense.value[cert_date,validFrom.max]</key>
+                    <units>unixtime</units>
+                    <description>This item will return will return the latest date &quot;validFrom&quot; from all the certificates (including CA). This is used to find new/renewed certificates.</description>
+                    <applications>
+                        <application>
+                            <name>Certificate Manager</name>
+                        </application>
+                    </applications>
+                    <preprocessing>
+                        <step>
+                            <type>DISCARD_UNCHANGED_HEARTBEAT</type>
+                            <params>1d</params>
+                        </step>
+                    </preprocessing>
+                    <triggers>
+                        <trigger>
+                            <expression>({now()}-{last()})&lt;1d</expression>
+                            <name>One or more certificates have been renewed in the past 24h</name>
+                            <opdata>Latest &quot;Valid From&quot;: {ITEM.LASTVALUE1}</opdata>
+                            <priority>INFO</priority>
+                            <manual_close>YES</manual_close>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>Certificates Manager: earliest &quot;validTo&quot;</name>
+                    <type>ZABBIX_ACTIVE</type>
+                    <key>pfsense.value[cert_date,validTo.min]</key>
+                    <units>unixtime</units>
+                    <description>This item will return will return the earliest date &quot;validTo&quot; from all the certificates (including CA). This is used to find expiring certificates.</description>
+                    <applications>
+                        <application>
+                            <name>Certificate Manager</name>
+                        </application>
+                    </applications>
+                    <preprocessing>
+                        <step>
+                            <type>DISCARD_UNCHANGED_HEARTBEAT</type>
+                            <params>1d</params>
+                        </step>
+                    </preprocessing>
+                    <triggers>
+                        <trigger>
+                            <expression>{last()}&lt;{now()}</expression>
+                            <name>One or more certificates are expired</name>
+                            <opdata>Earliest &quot;Valid To&quot;: {ITEM.LASTVALUE1}</opdata>
+                            <priority>HIGH</priority>
+                        </trigger>
+                        <trigger>
+                            <expression>({last()}-{now()})&lt;{$PFSENSE_CERT_EXPIRATION.AVERAGE}</expression>
+                            <name>One or more certificates are expiring less than {$PFSENSE_CERT_EXPIRATION.AVERAGE}</name>
+                            <opdata>Earliest &quot;Valid To&quot;: {ITEM.LASTVALUE1}</opdata>
+                            <priority>AVERAGE</priority>
+                            <dependencies>
+                                <dependency>
+                                    <name>One or more certificates are expired</name>
+                                    <expression>{Template Futur-Tech App pfSense Active:pfsense.value[cert_date,validTo.min].last()}&lt;{Template Futur-Tech App pfSense Active:pfsense.value[cert_date,validTo.min].now()}</expression>
+                                </dependency>
+                            </dependencies>
+                        </trigger>
+                        <trigger>
+                            <expression>({last()}-{now()})&lt;{$PFSENSE_CERT_EXPIRATION.WARN}</expression>
+                            <name>One or more certificates are expiring less than {$PFSENSE_CERT_EXPIRATION.WARN}</name>
+                            <opdata>Earliest &quot;Valid To&quot;: {ITEM.LASTVALUE1}</opdata>
+                            <priority>WARNING</priority>
+                            <dependencies>
+                                <dependency>
+                                    <name>One or more certificates are expired</name>
+                                    <expression>{Template Futur-Tech App pfSense Active:pfsense.value[cert_date,validTo.min].last()}&lt;{Template Futur-Tech App pfSense Active:pfsense.value[cert_date,validTo.min].now()}</expression>
+                                </dependency>
+                                <dependency>
+                                    <name>One or more certificates are expiring less than {$PFSENSE_CERT_EXPIRATION.AVERAGE}</name>
+                                    <expression>({Template Futur-Tech App pfSense Active:pfsense.value[cert_date,validTo.min].last()}-{Template Futur-Tech App pfSense Active:pfsense.value[cert_date,validTo.min].now()})&lt;{$PFSENSE_CERT_EXPIRATION.AVERAGE}</expression>
+                                </dependency>
+                            </dependencies>
+                        </trigger>
+                    </triggers>
+                </item>
+            </items>
+            <macros>
+                <macro>
+                    <macro>{$PFSENSE_CERT_EXPIRATION.AVERAGE}</macro>
+                    <value>48h</value>
+                </macro>
+                <macro>
+                    <macro>{$PFSENSE_CERT_EXPIRATION.WARN}</macro>
+                    <value>10d</value>
+                </macro>
+                <macro>
+                    <macro>{$PFSENSE_SRVC_MONITORING}</macro>
+                    <value>1</value>
+                    <description>Enable monitoring of Services</description>
+                </macro>
+                <macro>
+                    <macro>{$PFSENSE_SRVC_MONITORING:&quot;iperf&quot;}</macro>
+                    <value>0</value>
+                    <description>Disable monitoring of Service iperf Network Performance Testing Daemon/Client</description>
+                </macro>
+                <macro>
+                    <macro>{$PFSENSE_SRVC_MONITORING:&quot;pfb_dnsbl&quot;}</macro>
+                    <value>2</value>
+                    <description>Enable monitoring of Service pfBlockerNG DNSBL Web Server (check if NOT running)</description>
+                </macro>
+            </macros>
+        </template>
+    </templates>
+    <triggers>
+        <trigger>
+            <expression>{Template Futur-Tech App pfSense Active:system.uptime.change(0)}&lt;0</expression>
+            <name>Host has just been restarted</name>
+            <priority>INFO</priority>
+        </trigger>
+        <trigger>
+            <expression>{Template Futur-Tech App pfSense Active:pfsense.value[system,new_version_available].last()}=1</expression>
+            <name>New Version of pfSense Available</name>
+            <priority>INFO</priority>
+            <description>A new version of pfSense is available for update.</description>
+            <manual_close>YES</manual_close>
+            <dependencies>
+                <dependency>
+                    <name>New Version of pfSense {ITEM.LASTVALUE} Available</name>
+                    <expression>({Template Futur-Tech App pfSense Active:pfsense.value[system,version].last()}&lt;&gt;{Template Futur-Tech App pfSense Active:pfsense.value[system,installed_version].last()})=1&#13;
+and {Template Futur-Tech App pfSense Active:pfsense.value[system,version].strlen()}&gt;0&#13;
+and {Template Futur-Tech App pfSense Active:pfsense.value[system,installed_version].strlen()}&gt;0</expression>
+                </dependency>
+            </dependencies>
+        </trigger>
+        <trigger>
+            <expression>({Template Futur-Tech App pfSense Active:pfsense.value[system,version].last()}&lt;&gt;{Template Futur-Tech App pfSense Active:pfsense.value[system,installed_version].last()})=1&#13;
+and {Template Futur-Tech App pfSense Active:pfsense.value[system,version].strlen()}&gt;0&#13;
+and {Template Futur-Tech App pfSense Active:pfsense.value[system,installed_version].strlen()}&gt;0</expression>
+            <name>New Version of pfSense {ITEM.LASTVALUE} Available</name>
+            <opdata>Current: {ITEM.LASTVALUE2} Available: {ITEM.LASTVALUE1}</opdata>
+            <priority>INFO</priority>
+            <description>Notify of new version of pfsense available</description>
+        </trigger>
+        <trigger>
+            <expression>{Template Futur-Tech App pfSense Active:pfsense.value[system,packages_update].last()}&gt;0</expression>
+            <name>Packages Update Available</name>
+            <opdata>{ITEM.LASTVALUE}</opdata>
+            <priority>INFO</priority>
+            <description>New version of packages are available</description>
+        </trigger>
+    </triggers>
+</zabbix_export>
