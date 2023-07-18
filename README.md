@@ -55,6 +55,5 @@ If you want to skip the trigger for this service, add the macro $PFSENSE_SRVC_MO
 ```
 
 ## Credits
-
-[Rbicelli Zabbix Template](https://github.com/rbicelli/pfsense-zabbix-template) for Zabbix Template and PHP.
-[Keenton Zabbix Template](https://github.com/keentonsas/zabbix-template-pfsense) for Zabbix Agent freeBSD part.
+- [Rbicelli Zabbix Template](https://github.com/rbicelli/pfsense-zabbix-template) for Zabbix Template and PHP.
+- [Keenton Zabbix Template](https://github.com/keentonsas/zabbix-template-pfsense) for Zabbix Agent freeBSD part.
