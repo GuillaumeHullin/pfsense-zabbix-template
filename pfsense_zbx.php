@@ -1,13 +1,14 @@
 <?php
 /*** 
 pfsense_zbx.php - pfSense Zabbix Interface
-Version 1.1.1 - 2021-10-24
+Version 0.24.7 - 2024-04-27
 
 Written by Riccardo Bicelli <r.bicelli@gmail.com>
 This program is licensed under Apache 2.0 License
 */
 
 //Some Useful defines
+define ('SCRIPT_VERSION','0.24.7');
 
 define('SPEEDTEST_INTERVAL', 8); //Speedtest Interval (in hours)
 define('CRON_TIME_LIMIT', 300); // Time limit in seconds of speedtest and sysinfo 
@@ -31,6 +32,16 @@ require_once("service-utils.inc");
 require_once('pkg-utils.inc'); 
 
 //For DHCP
+
+//Backporting php 8 functions
+if (!function_exists('str_contains')){
+
+	function str_contains($haystack,$needle){
+
+		return strstr($haystack,$needle);
+	}
+
+}
 
 //Testing function, for template creating purpose
 function pfz_test(){
@@ -1067,15 +1078,19 @@ function pfz_packages_uptodate(){
 }
 
 
-function pfz_sysversion_cron_install($enable=true){
+function pfz_syscheck_cron_install($enable=true){
 	//Install Cron Job
+	$command = "/usr/local/bin/php " . __FILE__ . " syscheck_cron";
+	install_cron_job($command, $enable, $minute = "0", "*/8", "*", "*", "*", "root", true);
+
+	// FIX previous, wrong-coded install command
 	$command = "/usr/local/bin/php " . __FILE__ . " systemcheck_cron";
-	install_cron_job($command, $enable, $minute = "0", "9,21", "*", "*", "*", "root", true);
+	install_cron_job($command, false, $minute = "0", "9,21", "*", "*", "*", "root", true);
 }    
 
 // System information takes a long time to get on slower systems. 
 // So it is saved via a cronjob.
-function pfz_sysversion_cron (){	
+function pfz_syscheck_cron (){	
 	$filename = "/tmp/sysversion.json";	
 	$upToDate = pfz_packages_uptodate();
 	$sysVersion = get_system_pkg_version();
@@ -1099,28 +1114,33 @@ function pfz_get_system_value($section){
 	if(file_exists($filename)) {
 		$sysVersion = json_decode(file_get_contents($filename), true);
 	} else {
+		// Install the cron script
+		pfz_syscheck_cron_install();
 		if($section == "new_version_available") {
 			echo "0";
 		} else {
-			echo "error: cronjob not installed. Run \"php pfsense_zbx.php sysversion_cron\""; 
+			echo "";
 		}
 	}
-     switch ($section){
-          case "version":
-               echo( $sysVersion['version']);
-               break;
-          case "installed_version":
-               echo($sysVersion['installed_version']);
-               break;
-          case "new_version_available":
-               if ($sysVersion['version']==$sysVersion['installed_version'])
-                    echo "0";
-               else
-                    echo "1";
-               break;
-          case "packages_update":
-          		echo $sysVersion["packages_update"];
-          		break;
+	switch ($section){
+        case "script_version":
+			echo SCRIPT_VERSION;
+			break;
+		case "version":
+            echo( $sysVersion['version']);
+            break;
+        case "installed_version":
+            echo($sysVersion['installed_version']);
+            break;
+        case "new_version_available":
+            if ($sysVersion['version']==$sysVersion['installed_version'])
+                echo "0";
+            else
+                echo "1";
+            break;
+        case "packages_update":
+          	echo $sysVersion["packages_update"];
+          	break;
      }
 }
 
@@ -1193,7 +1213,7 @@ function pfz_cert_discovery(){
 }
 
 function pfz_get_cert_info($index) {
-	# Use a cache file to speed up multiple requests for certificate things. 
+	// Use a cache file to speed up multiple requests for certificate things. 
 	$cacheFile = "/root/.ssl/certinfo_{$index}.json";
 	if(file_exists($cacheFile) && (time() - filemtime($cacheFile) < 300)) {
 		return json_decode(file_get_contents($cacheFile), true);		
@@ -1222,6 +1242,8 @@ function pfz_get_cert_info($index) {
 }
 
 function pfz_get_cert_pkey_info($index) {
+	$details = array();
+	
 	$cacheFile = "/root/.ssl/certinfo_pk_{$index}.json";
 	if(file_exists($cacheFile) && (time() - filemtime($cacheFile) < 300)) {
 		return json_decode(file_get_contents($cacheFile), true);		
@@ -1233,19 +1255,22 @@ function pfz_get_cert_pkey_info($index) {
 	} else {
 		$certType = "cert";
 	}
-	$publicKey = openssl_pkey_get_public(base64_decode($config[$certType][$index]["crt"]));
-	$details = openssl_pkey_get_details($publicKey);	
-	# Don't allow other users access to private keys. 
-	if(file_exists($cacheFile)) {
-		unlink($cacheFile);
-	}
-	touch($cacheFile);
-	chmod($cacheFile, 0600); 
-	if (!is_dir('/root/.ssl')) {
-		mkdir('/root/.ssl');
-	}
-	if(!file_put_contents($cacheFile, json_encode($details))) {
-		unlink($cacheFile);
+	$cert_key = $config[$certType][$index]["crt"];
+	if ($cert_key!=false) {
+		$publicKey = openssl_pkey_get_public(base64_decode($cert_key));
+		$details = openssl_pkey_get_details($publicKey);	
+		# Don't allow other users access to private keys. 
+		if(file_exists($cacheFile)) {
+			unlink($cacheFile);
+		}
+		touch($cacheFile);
+		chmod($cacheFile, 0600); 
+		if (!is_dir('/root/.ssl')) {
+			mkdir('/root/.ssl');
+		}
+		if(!file_put_contents($cacheFile, json_encode($details))) {
+			unlink($cacheFile);
+		}
 	}	
 	return $details;
 }
@@ -1307,7 +1332,7 @@ function pfz_get_ref_cert_hash_bits($index){
 	}
 	if(str_contains($upperSigType, "MD5")) {
 		echo 18;
-		return;		
+		return;
 	}
 	if(str_contains($upperSigType, "SHA1")) {
 		echo 61;
@@ -1606,9 +1631,9 @@ switch ($mainArgument){
      case "if_name":
           pfz_get_if_name($argv[2]);
           break;
-     case "sysversion_cron":
-          pfz_sysversion_cron_install();
-          pfz_sysversion_cron();
+     case "syscheck_cron":
+          pfz_syscheck_cron_install();
+          pfz_syscheck_cron();
           break;
      case "system":
           pfz_get_system_value($argv[2]);
@@ -1629,9 +1654,13 @@ switch ($mainArgument){
      	  pfz_speedtest_cron_install();
      	  pfz_speedtest_cron();
      	  break;
+	 case "syscheck_cron":
+		   pfz_syscheck_cron_install();
+		   pfz_syscheck_cron();
+		   break;
      case "cron_cleanup":
      	  pfz_speedtest_cron_install(false);
-     	  pfz_sysversion_cron_install(false);
+     	  pfz_syscheck_cron_install(false);
      	  break;
      case "smart_status":
           pfz_get_smart_status();
@@ -1656,8 +1685,7 @@ switch ($mainArgument){
           break;	
      case "cert_hash_secbits":
           pfz_get_ref_cert_hash_bits($argv[2]);
-          break;	
-		  
+          break;			  
      case "temperature":
           pfz_get_temperature($argv[2]);
           break;
