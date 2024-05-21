@@ -1,6 +1,6 @@
 zabbix_export:
   version: '6.0'
-  date: '2024-05-21T10:29:10Z'
+  date: '2024-05-21T10:34:21Z'
   groups:
     - uuid: 7f27dc73981940769811e7fae4a26772
       name: Templates/Futur-Tech/Applications
@@ -24,10 +24,6 @@ zabbix_export:
       tags:
         - tag: Futur-Tech
       macros:
-        - macro: '{$PFSENSE_CERT_EXPIRATION.AVERAGE}'
-          value: 48h
-        - macro: '{$PFSENSE_CERT_EXPIRATION.WARN}'
-          value: 10d
         - macro: '{$PFSENSE_SRVC_MONITORING}'
           value: '1'
           description: 'Enable monitoring of Services'
